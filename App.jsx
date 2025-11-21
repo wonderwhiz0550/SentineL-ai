@@ -6,25 +6,14 @@ import {
   Move, MousePointer2, Hand
 } from 'lucide-react';
 
-// --- Data Constants ---
-// Theme 2 (Elegant Corporate) color palette applied inline:
-// bg: #0F1724
-// text: #F8FAFC
-// gold accent: #F6C85F
-// active green: #16A34A
-// critical coral: #EF6C6C
-// neutral edge: #8A94A6
-// gov trigger: #60A5FA
-
+// (INITIAL_NODES and INITIAL_EDGES are defined below)
 const INITIAL_NODES = [
-  // Section 1: Real-Time
   { id: '1', x: 50, y: 100, type: 'glass', label: 'Input', subLabel: 'Incoming Transaction', icon: Zap },
   { id: '2', x: 350, y: 70, type: 'decision', label: 'Decision Engine', icon: Activity },
-  { id: '3', x: 350, y: 250, type: 'glass', label: 'Result', subLabel: 'Genuine', icon: CheckCircle2, status: 'active', color: 'text-[#16A34A] bg-[#16A34A]/12' },
-  { id: '4', x: 650, y: 100, type: 'glass', label: 'Alert', subLabel: 'Fraud Detected', icon: ShieldAlert, status: 'critical', color: 'text-[#EF6C6C] bg-[#EF6C6C]/12' },
+  { id: '3', x: 350, y: 250, type: 'glass', label: 'Result', subLabel: 'As Expected', icon: CheckCircle2, status: 'active', color: 'text-[#16A34A] bg-[#16A34A]/12' },
+  { id: '4', x: 650, y: 100, type: 'glass', label: 'Alert', subLabel: 'Fraud Missed', icon: ShieldAlert, status: 'critical', color: 'text-[#EF6C6C] bg-[#EF6C6C]/12' },
   { id: '5', x: 650, y: 300, type: 'glass', label: 'Action', subLabel: 'Customer Call', icon: PhoneCall },
 
-  // Section 2: GenAI Solution
   { id: '6', x: 50, y: 500, type: 'glass', label: 'Input', subLabel: 'Call Transcript', icon: FileText },
   { id: '7', x: 350, y: 500, type: 'glass', label: 'GenAI Analysis', subLabel: 'Extract Fraud M.O.', icon: BrainCircuit, color: 'text-[#8B5CF6] bg-[#8B5CF6]/12' },
   { id: '8', x: 350, y: 620, type: 'glass', label: 'Optimization', subLabel: 'Rec. New Features', icon: Database },
@@ -33,7 +22,6 @@ const INITIAL_NODES = [
   { id: '11', x: 350, y: 725, type: 'decision', label: 'KPI Check', icon: Activity },
   { id: '12', x: 650, y: 740, type: 'glass', label: 'Result', subLabel: 'Improvement Found', icon: Rocket, status: 'active' },
 
-  // Section 3: Governance
   { id: '13', x: 1000, y: 150, type: 'glass', label: 'Orchestrator', subLabel: 'Governance Agent', icon: Bot, color: 'text-[#60A5FA] bg-[#60A5FA]/12', status: 'active' },
   { id: '14', x: 850, y: 300, type: 'glass', label: 'Agent 1', subLabel: 'TOR Generator', icon: FileCheck },
   { id: '15', x: 1150, y: 300, type: 'glass', label: 'Agent 2', subLabel: 'Repo/Code Scan', icon: GitBranch },
@@ -88,7 +76,6 @@ export default function App() {
   
   const containerRef = useRef(null);
 
-  // Inject Poppins font into head (so you don't have to edit HTML)
   useEffect(() => {
     const id = 'poppins-google-font';
     if (!document.getElementById(id)) {
@@ -100,26 +87,61 @@ export default function App() {
     }
   }, []);
 
-  // --- Handlers ---
+  // --- Sections (draggable + resizable) ---
+  const INITIAL_SECTIONS = [
+    { id: 'section-rt', x: 20, y: 50, w: 780, h: 350, title: 'Real-Time Detection' },
+    { id: 'section-s1', x: 40, y: 450, w: 750, h: 380, title: 'Solution 1: GenAI & MLOps Improvement Loop' },
+    { id: 'section-s2', x: 800, y: 100, w: 550, h: 800, title: 'Solution 2: Agent-Based Governance & Deployment' },
+  ];
+
+  const [sections, setSections] = useState(INITIAL_SECTIONS);
+
+  // --- Glow Helpers ---
+  const hexToRgba = (hex, alpha = 0.35) => {
+    if (!hex) return `rgba(246,200,95,${alpha})`;
+    let h = hex.replace('#', '');
+    if (h.length === 3) h = h.split('').map(ch => ch + ch).join('');
+    if (h.length !== 6) return `rgba(246,200,95,${alpha})`;
+    const r = parseInt(h.slice(0,2), 16);
+    const g = parseInt(h.slice(2,4), 16);
+    const b = parseInt(h.slice(4,6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  };
+
+  const getGlowColor = (node) => {
+    const colorString = node.color || '';
+    const match = colorString.match(/#([0-9a-fA-F]{3,6})/);
+    if (match) return hexToRgba(`#${match[1]}`, 0.35);
+
+    if (node.status === 'critical') return 'rgba(239,108,108,0.35)';
+    if (node.status === 'active') return 'rgba(22,163,74,0.35)';
+    return 'rgba(246,200,95,0.28)';
+  };
 
   const handleStart = (clientX, clientY, targetId = null) => {
-    // Determine if we are dragging a node or panning the background
-    // Node drag only happens in 'edit' mode when clicking a node
-    const isNodeDrag = mode === 'edit' && targetId !== null;
-    
+    const isNodeDrag = mode === 'edit' && targetId && !targetId.startsWith('resize-');
     setIsDragging(true);
-    setDragTargetId(isNodeDrag ? targetId : null);
+    setDragTargetId(isNodeDrag ? targetId : targetId); // can be node id, section id, or resize id
     setLastPos({ x: clientX, y: clientY });
   };
 
   const handleMove = (clientX, clientY) => {
     if (!isDragging) return;
+    const deltaX = (clientX - lastPos.x);
+    const deltaY = (clientY - lastPos.y);
 
-    const deltaX = clientX - lastPos.x;
-    const deltaY = clientY - lastPos.y;
-
-    if (dragTargetId) {
-      // Dragging Node (Account for scale)
+    // If dragging a section
+    if (dragTargetId && dragTargetId.startsWith && dragTargetId.startsWith('section-')) {
+      const id = dragTargetId;
+      setSections(prev => prev.map(s => s.id === id ? { ...s, x: s.x + deltaX / scale, y: s.y + deltaY / scale } : s));
+    }
+    // If resizing a section
+    else if (dragTargetId && dragTargetId.startsWith && dragTargetId.startsWith('resize-')) {
+      const id = dragTargetId.replace('resize-','');
+      setSections(prev => prev.map(s => s.id === id ? { ...s, w: Math.max(120, s.w + deltaX / scale), h: Math.max(80, s.h + deltaY / scale) } : s));
+    }
+    // existing node dragging
+    else if (dragTargetId) {
       setNodes((prev) =>
         prev.map((n) =>
           n.id === dragTargetId
@@ -128,7 +150,7 @@ export default function App() {
         )
       );
     } else {
-      // Panning Background (Direct 1:1 movement feels best for pan)
+      // panning
       setPan((prev) => ({ x: prev.x + deltaX, y: prev.y + deltaY }));
     }
 
@@ -140,55 +162,40 @@ export default function App() {
     setDragTargetId(null);
   };
 
-  // --- Mouse Events ---
   const onMouseDown = (e, id = null) => {
     if (e.button !== 0) return;
-    // Stop propagation if clicking a node so we don't double trigger
-    if (id) e.stopPropagation(); 
+    if (id) e.stopPropagation();
     handleStart(e.clientX, e.clientY, id);
   };
-
-  const onMouseMove = (e) => {
-    handleMove(e.clientX, e.clientY);
-  };
-
-  // --- Touch Events ---
+  const onMouseMove = (e) => handleMove(e.clientX, e.clientY);
   const onTouchStart = (e, id = null) => {
-    if (e.touches.length !== 1) return; // Only support single touch for drag/pan
+    if (e.touches.length !== 1) return;
     if (id) e.stopPropagation();
     const touch = e.touches[0];
     handleStart(touch.clientX, touch.clientY, id);
   };
-
   const onTouchMove = (e) => {
     if (e.touches.length !== 1 || !isDragging) return;
     const touch = e.touches[0];
     handleMove(touch.clientX, touch.clientY);
   };
 
-  // --- Zoom ---
   const zoomIn = () => setScale(s => Math.min(s + 0.1, 2));
   const zoomOut = () => setScale(s => Math.max(s - 0.1, 0.2));
   const zoomFit = () => { setScale(0.6); setPan({x: 0, y: 0}); };
 
-  // --- Render Functions ---
-
-  // Helper function to calculate path for rendering
   const renderEdges = () => {
-    const OFF = 5000; // Global SVG offset for visibility
-
+    const OFF = 5000;
     return INITIAL_EDGES.map((edge) => {
       const startNode = nodes.find(n => n.id === edge.source);
       const endNode = nodes.find(n => n.id === edge.target);
       if (!startNode || !endNode) return null;
 
-      // Define default connection points (center-ish of bottom/top)
       let sx = startNode.x + (startNode.type === 'decision' ? 50 : 110);
       let sy = startNode.y + (startNode.type === 'decision' ? 100 : 80);
       let ex = endNode.x + (endNode.type === 'decision' ? 50 : 110);
-      let ey = endNode.y; // Default connection to top of target node
+      let ey = endNode.y;
 
-      // Override connection points based on handle
       if (edge.sourceHandle === 'right') {
         sx = startNode.x + (startNode.type === 'decision' ? 100 : 220);
         sy = startNode.y + (startNode.type === 'decision' ? 50 : 40);
@@ -198,34 +205,24 @@ export default function App() {
       if (edge.sourceHandle === 'bottom') {
         sx = startNode.x + 50;
         sy = startNode.y + 100;
-        // ex, ey remain default (top center of target)
       }
       
       let d = '';
       let labelOffset = 10;
-      
-      // Special logic for the loop (Node 21 back to 2)
       if (edge.source === '21' && edge.target === '2') {
         sx = startNode.x + 110; sy = startNode.y;
         ex = endNode.x + 50; ey = endNode.y;
-        // Use a large curved path that goes up and left
         d = `M ${OFF+sx} ${OFF+sy} C ${OFF+sx + 200} ${OFF+sy - 300}, ${OFF+ex - 400} ${OFF+ey - 200}, ${OFF+ex} ${OFF+ey}`;
-        labelOffset = -150; // Adjust label position for the loop
+        labelOffset = -150;
       } else {
-        // Standard vertical/horizontal curve
-        const controlX = Math.abs(ex - sx) * 0.4; // 40% horizontal control point
-        // const controlY = Math.abs(ey - sy) * 0.4; // 40% vertical control point (not used for this path style)
-        
-        // Simple cubic Bezier for smooth horizontal flow
+        const controlX = Math.abs(ex - sx) * 0.4;
         d = `M ${OFF+sx} ${OFF+sy} C ${OFF+sx + controlX} ${OFF+sy}, ${OFF+ex - controlX} ${OFF+ey}, ${OFF+ex} ${OFF+ey}`;
       }
 
-      // Ensure the marker arrow matches the stroke color
       const markerId = `arrow-${edge.color.replace('#', '')}`;
       
       return (
         <g key={edge.id}>
-          {/* Edge Path */}
           <path 
             d={d} fill="none" stroke={edge.color} strokeWidth="2" 
             markerEnd={`url(#${markerId})`} 
@@ -233,14 +230,12 @@ export default function App() {
             className="transition-opacity duration-300"
           />
           
-          {/* Animated Dot (Only for solid lines) */}
           {edge.type !== 'dashed' && (
             <circle r="3" fill={edge.color}>
               <animateMotion dur="4s" repeatCount="indefinite" path={d} />
             </circle>
           )}
 
-          {/* Edge Label */}
           {edge.label && (
             <text x={OFF+(sx + ex) / 2} y={OFF+(sy + ey) / 2 - labelOffset} 
                   fill={edge.color} fontSize="12" fontWeight="bold" 
@@ -250,7 +245,6 @@ export default function App() {
             </text>
           )}
 
-          {/* Invisible path to generate the correct arrow head color */}
           <marker id={markerId} markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
             <path d="M0,0 L0,6 L9,3 z" fill={edge.color} />
           </marker>
@@ -270,19 +264,49 @@ export default function App() {
       onTouchStart={(e) => onTouchStart(e, null)}
       onTouchMove={onTouchMove}
       onTouchEnd={handleEnd}
-      // inline fontFamily ensures Poppins used even without Tailwind config
       style={{ backgroundColor: '#0F1724', color: '#F8FAFC', fontFamily: "'Poppins', Inter, system-ui, -apple-system, sans-serif" }}
     >
+      {/* ----- Hover glow CSS (scoped here) ----- */}
+      <style>{`
+        .node-card {
+          transition: transform 180ms cubic-bezier(.2,.9,.3,1), box-shadow 220ms ease, z-index 1;
+          will-change: transform, box-shadow;
+        }
+        .node-card:hover {
+          transform: translateY(-6px) scale(1.03);
+          z-index: 70;
+          box-shadow: 0 10px 40px var(--glow);
+          border-color: rgba(255,255,255,0.06);
+        }
+
+        .decision-card {
+          transition: transform 180ms cubic-bezier(.2,.9,.3,1), box-shadow 220ms ease;
+          will-change: transform, box-shadow;
+        }
+        .decision-card:hover {
+          transform: translateY(-6px) rotate(45deg) scale(1.04);
+          z-index: 70;
+          box-shadow: 0 12px 40px var(--glow);
+        }
+
+        .node-wrapper { pointer-events: auto; }
+
+        /* section styles */
+        .section-box { border-style: dashed; border-width: 2px; border-radius: 24px; background-clip: padding-box; }
+        .section-title { font-weight: 700; font-size: 18px; }
+        .section-resizer { width: 14px; height: 14px; border-radius: 3px; background: rgba(255,255,255,0.06); cursor: se-resize; display: flex; align-items: center; justify-content: center; }
+      `}</style>
+
       {/* Animated Background Grid */}
       <div className="absolute inset-0 pointer-events-none opacity-18" 
-          style={{ 
-            backgroundImage: 'radial-gradient(#1b2430 1px, transparent 1px)', 
-            backgroundSize: '30px 30px',
-            backgroundPosition: `${pan.x}px ${pan.y}px`, // Apply pan to grid background
-            transform: `scale(${scale})`, // Only scale the grid
-            transformOrigin: '0 0',
-            transition: 'background-position 0.1s linear' // Smooth panning feel
-          }}>
+        style={{ 
+          backgroundImage: 'radial-gradient(#1b2430 1px, transparent 1px)', 
+          backgroundSize: '30px 30px',
+          backgroundPosition: `${pan.x}px ${pan.y}px`,
+          transform: `scale(${scale})`,
+          transformOrigin: '0 0',
+          transition: 'background-position 0.1s linear'
+        }}>
       </div>
 
       {/* Header & Mode Toggle */}
@@ -297,7 +321,7 @@ export default function App() {
                   color: 'transparent',
                   textShadow: '0 4px 18px rgba(246,200,95,0.12)'
                 }}>
-              SentineL AI
+              SentineL - AI
             </h1>
             <p className="text-xs font-mono hidden md:block" style={{ color: '#CBD5E1' }}>Interactive Architecture Diagram</p> 
           </div>
@@ -358,82 +382,119 @@ export default function App() {
           {renderEdges()}
         </svg>
 
-        {/* Background Labels (Zones) */}
-        {/* Real-Time Zone */}
-        <div className="absolute left-[20px] top-[50px] pointer-events-none">
-            <h2 className="text-2xl font-bold" style={{ color: '#9AA4B3', opacity: 0.9 }}>Real-Time Detection</h2>
-            <div className="w-[780px] h-[350px] border-2 border-dashed rounded-3xl mt-2" style={{ borderColor: 'rgba(138,148,166,0.08)', background: 'linear-gradient(180deg, rgba(15,23,36,0.02), rgba(15,23,36,0.01))' }}></div>
-        </div>
-        {/* Solution 1: GenAI & MLOps */}
-        <div className="absolute left-[40px] top-[450px] pointer-events-none">
-            <h2 className="text-2xl font-bold" style={{ color: '#9AA4B3', opacity: 0.9 }}>Solution 1: GenAI & MLOps Improvement Loop</h2><br></br>
-            <div className="w-[750px] h-[380px] border-2 border-dashed rounded-3xl mt-2" style={{ borderColor: 'rgba(96,165,250,0.06)', background: 'linear-gradient(180deg, rgba(9,24,48,0.02), rgba(9,24,48,0.01))' }}></div>
-        </div>
-        {/* Solution 2: Agent Governance */}
-        <div className="absolute left-[800px] top-[100px] pointer-events-none">
-            <h2 className="text-2xl font-bold" style={{ color: '#9AA4B3', opacity: 0.9 }}>Solution 2: Agent-Based Governance & Deployment</h2>
-            <div className="w-[550px] h-[800px] border-2 border-dashed rounded-3xl mt-2" style={{ borderColor: 'rgba(96,165,250,0.06)', background: 'linear-gradient(180deg, rgba(9,24,48,0.02), rgba(9,24,48,0.01))' }}></div>
-        </div>
-
-
-        {/* Nodes */}
-        {nodes.map((node) => (
-          <div
-            key={node.id}
-            onMouseDown={(e) => onMouseDown(e, node.id)}
-            onTouchStart={(e) => onTouchStart(e, node.id)}
-            style={{ 
-              left: node.x, 
-              top: node.y,
-              width: node.type === 'decision' ? 100 : 220,
-              height: node.type === 'decision' ? 100 : 'auto'
-            }}
-            className={`
-              absolute group transition-shadow duration-200
-              ${mode === 'edit' ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'}
-              ${dragTargetId === node.id ? 'z-50 shadow-[0_0_50px_rgba(255,255,255,0.06)]' : 'z-20'}
-            `}
+        {/* Background Labels (Zones) - now draggable as full containers */}
+        {sections.map(sec => (
+          <div key={sec.id}
+               className="absolute"
+               style={{ left: sec.x, top: sec.y, width: sec.w, height: sec.h, touchAction: 'none' }}
           >
-            {/* Glass Node Style */}
-            {node.type === 'glass' && (
-              <div className={`
-                relative flex items-center gap-4 p-4 rounded-xl border backdrop-blur-xl shadow-2xl select-none
-                ${node.status === 'critical' ? 'border-8' : node.status === 'active' ? 'border-8' : 'border-8'}
-                ${mode === 'edit' ? '' : ''}
-                transition-all
-              `} style={{
-                borderColor: node.status === 'critical' ? 'rgba(239,108,108,0.18)' :
-                              node.status === 'active' ? 'rgba(22,163,74,0.18)' : 'rgba(138,148,166,0.06)',
-                background: node.status === 'critical' ? 'rgba(239,108,108,0.04)' :
-                            node.status === 'active' ? 'rgba(22,163,74,0.03)' : 'rgba(255,255,255,0.01)'
-              }}>
-                <div className={`p-2.5 rounded-lg ${node.color || 'bg-[#0b1220] text-[#9AA4B3]'}`}
-                     style={{ background: node.color ? undefined : '#0b1220', color: node.color ? undefined : '#9AA4B3' }}>
-                  {node.icon && <node.icon size={20} />}
-                </div>
-                <div>
-                  <div className="text-[10px] font-bold uppercase tracking-widest mb-0.5" style={{ color: '#9AA4B3' }}>{node.label}</div>
-                  <div className="text-sm font-medium leading-tight" style={{ color: '#F8FAFC' }}>{node.subLabel}</div>
-                </div>
-              </div>
-            )}
-            
-            {/* Decision Node Style (Diamond) */}
-            {node.type === 'decision' && (
-              <div className="relative w-24 h-24 mx-auto select-none">
-                <div className={`
-                  absolute inset-0 rotate-45 rounded-xl border-2 backdrop-blur-md shadow-lg flex items-center justify-center
-                  transition-all
-                `} style={{ background: 'rgba(15,23,36,0.9)', borderColor: 'rgba(246,200,95,0.12)' }}>
-                  <div className="-rotate-45 text-center">
-                    {node.icon && <node.icon className="w-6 h-6 mx-auto mb-1" style={{ color: '#F6C85F' }} />}
-                    <div className="text-[9px] font-bold leading-none" style={{ color: '#F6C85F' }}>{node.label.toUpperCase()}</div>
+            {/* Make the entire bordered area interactive (outer wrapper catches drag) */}
+            <div
+              onMouseDown={(e) => { if (mode === 'edit') { e.stopPropagation(); onMouseDown(e, sec.id); } }}
+              onTouchStart={(e) => { if (mode === 'edit') { e.stopPropagation(); onTouchStart(e, sec.id); } }}
+              className="section-box p-4"
+              style={{
+                position: 'absolute',
+                inset: 0,
+                borderColor: 'rgba(255,255,255,0.95)',
+                background: 'linear-gradient(180deg, rgba(15,23,36,0.02), rgba(15,23,36,0.01))',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'flex-start',
+                gap: 6,
+                pointerEvents: 'auto'
+              }}
+            >
+              <div className="flex justify-between items-start w-full">
+                <h2 className="section-title" style={{ color: '#F6C85F', opacity: 0.95 }}>{sec.title}</h2>
+                {mode === 'edit' && (
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <div style={{ fontSize: 12, color: '#CBD5E1' }}>Drag to move</div>
                   </div>
-                </div>
+                )}
               </div>
-            )}
+
+              {/* content placeholder keeps box height; nodes render on top of sections */}
+              <div style={{ flex: 1 }} />
+
+              {/* resize handle (bottom-right) - part of the section so it resizes the whole bordered area */}
+              {mode === 'edit' && (
+                <div
+                  onMouseDown={(e) => { e.stopPropagation(); onMouseDown(e, `resize-${sec.id}`); }}
+                  onTouchStart={(e) => { e.stopPropagation(); onTouchStart(e, `resize-${sec.id}`); }}
+                  className="absolute"
+                  style={{ right: 8, bottom: 8, pointerEvents: 'auto' }}>
+                  <div className="section-resizer" />
+                </div>
+              )}
+            </div>
           </div>
         ))}
+
+        {/* Nodes */}
+        {nodes.map((node) => {
+          const glow = getGlowColor(node);
+          return (
+            <div
+              key={node.id}
+              onMouseDown={(e) => onMouseDown(e, node.id)}
+              onTouchStart={(e) => onTouchStart(e, node.id)}
+              style={{ 
+                left: node.x, 
+                top: node.y,
+                width: node.type === 'decision' ? 100 : 220,
+                height: node.type === 'decision' ? 100 : 'auto',
+              }}
+              className={`absolute node-wrapper group transition-shadow duration-200
+                ${mode === 'edit' ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'}
+                ${dragTargetId === node.id ? 'z-50' : 'z-20'}
+              `}
+            >
+              {/* Glass Node */}
+              {node.type === 'glass' && (
+                <div
+                  className={`relative flex items-center gap-4 p-4 rounded-xl border backdrop-blur-xl shadow-2xl select-none node-card`}
+                  style={{
+                    borderColor: node.status === 'critical' ? 'rgba(239,108,108,0.18)' :
+                                node.status === 'active' ? 'rgba(22,163,74,0.18)' : 'rgba(138,148,166,0.06)',
+                    background: node.status === 'critical' ? 'rgba(239,108,108,0.04)' :
+                                node.status === 'active' ? 'rgba(22,163,74,0.03)' : 'rgba(255,255,255,0.01)',
+                    '--glow': glow,
+                    boxShadow: dragTargetId === node.id ? `0 12px 60px ${glow}` : undefined
+                  }}
+                >
+                  <div className={`p-2.5 rounded-lg ${node.color || 'bg-[#0b1220] text-[#9AA4B3]'}`}
+                       style={{ background: node.color ? undefined : '#0b1220', color: node.color ? undefined : '#9AA4B3' }}>
+                    {node.icon && <node.icon size={20} />}
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-bold uppercase tracking-widest mb-0.5" style={{ color: '#9AA4B3' }}>{node.label}</div>
+                    <div className="text-sm font-medium leading-tight" style={{ color: '#F8FAFC' }}>{node.subLabel}</div>
+                  </div>
+                </div>
+              )}
+
+              {/* Decision Node (diamond) */}
+              {node.type === 'decision' && (
+                <div className="relative w-24 h-24 mx-auto select-none">
+                  <div
+                    className={`absolute inset-0 rotate-45 rounded-xl border-2 backdrop-blur-md shadow-lg flex items-center justify-center decision-card`}
+                    style={{
+                      background: 'rgba(15,23,36,0.9)',
+                      borderColor: 'rgba(246,200,95,0.12)',
+                      '--glow': glow,
+                    }}
+                  >
+                    <div className="-rotate-45 text-center">
+                      {node.icon && <node.icon className="w-6 h-6 mx-auto mb-1" style={{ color: '#F6C85F' }} />}
+                      <div className="text-[9px] font-bold leading-none" style={{ color: '#F6C85F' }}>{node.label.toUpperCase()}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
 
       </div>
     </div>
